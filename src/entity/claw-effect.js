@@ -19,7 +19,7 @@ class ClawEffect extends Entity {
     }
 
     render() {
-        ctx.translate(this.x, this.y);
+        ctx.translate(this.renderX, this.renderY);
 
         const fadeDuration = 0.25;
         const fadeProgress = (this.age - (1 - fadeDuration)) / fadeDuration;

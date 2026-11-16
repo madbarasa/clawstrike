@@ -27,7 +27,7 @@ class Label extends Entity {
     render() {
         if (!this.visibleStartAge && !(DEBUG && this.world.editorMode)) return;
 
-        ctx.translate(this.x, this.y);
+        ctx.translate(this.renderX, this.renderY);
 
         const animationRatio = DEBUG && this.world.editorMode
             ? 1
@@ -36,11 +36,12 @@ class Label extends Entity {
         ctx.globalAlpha = interpolate(0, 0.9, animationRatio);
         ctx.translate(0, interpolate(20, 0, animationRatio));
         ctx.fillStyle = '#fff';
-        ctx.font = 'bold 40px Impact';
+        ctx.font = nomangle('bold 40px "微软雅黑", "PingFang SC", "Microsoft YaHei", sans-serif');
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.strokeStyle = '#000';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 6;
+        ctx.lineJoin = 'round';
         ctx.drawCommandText(this.text);
     }
 }

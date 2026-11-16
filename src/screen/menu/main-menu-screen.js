@@ -1,39 +1,43 @@
 class MainMenuScreen extends MenuScreen {
 
-    title = document.title;
+    title = 'CLAWSTRIKE';
 
     constructor(worldScreen) {
         super();
 
         this.worldScreen = worldScreen;
 
-        this.addCommand(
-            inputMode == INPUT_MODE_KEYBOARD
-                ? nomangle('PRESS [SPACE] TO START')
-                : nomangle('[TAP] TO START'),
-            () => downKeys[32] || TOUCH_DOWN,
+        // 键盘按下即时响应，触摸端轻触屏幕任意位置开始
+        this.addCommandWithHints(
+            '按 [空格] 开始',
+            { icon: 'play', text: '轻触屏幕开始' },
+            () => (inputMode == INPUT_MODE_KEYBOARD
+                ? held(KEY_ATTACK)
+                : pressed(KEY_ATTACK) || TOUCH_TAPPED),
             () => this.startGame(),
-            false,
         );
 
+        if (G.bestRunTime) {
+            this.addCommand(
+                '按 [9] 进入九命模式',
+                () => (inputMode == INPUT_MODE_KEYBOARD
+                    ? held(KEY_NINE_LIVES)
+                    : pressed(KEY_NINE_LIVES)),
+                () => {
+                    G.difficulty = DIFFICULTY_NINE_LIVES;
+                    this.startGame();
+                },
+            );
+        }
+
         if (inputMode == INPUT_MODE_KEYBOARD) {
-            if (G.bestRunTime) {
-                this.addCommand(
-                    nomangle('PRESS [9] TO START 9 LIVES MODE'),
-                    () => downKeys[57],
-                    () => {
-                        G.difficulty = DIFFICULTY_NINE_LIVES;
-                        this.startGame();
-                    },
-                );
-            }
-            this.addDifficultyChangeCommand();
+            this.addDifficultyCycleCommands();
         }
 
         if (DEBUG) {
             this.addCommand(
-                nomangle('PRESS [E] TO ENTER LEVEL EDITOR'),
-                () => downKeys[69], // nice
+                '按 [E] 进入关卡编辑器',
+                () => downKeys[69],
                 () => G.navigate(new LevelEditorScreen(ALL_LEVELS[0]), true),
             );
         }
@@ -43,6 +47,7 @@ class MainMenuScreen extends MenuScreen {
         const cat = firstItem(worldScreen.world.category('cat'));
         const camera = firstItem(worldScreen.world.category('camera'));
         camera.zoom = 3;
+        camera.previousZoom = 3;
         camera.target = new Entity();
         camera.x = camera.target.x = cat.x;
         camera.y = camera.target.y = cat.y - 20;
@@ -52,6 +57,10 @@ class MainMenuScreen extends MenuScreen {
         }
 
         worldScreen.cycle(2);
+
+        this.onUiTap = (button) => {
+            if (button === 'settings') this.openSettings();
+        };
 
         (async () => {
             const flash = world.addEntity(new Flash('#000'));
@@ -75,11 +84,15 @@ class MainMenuScreen extends MenuScreen {
         })();
     }
 
+    async openSettings() {
+        await G.navigate(new SettingsScreen()).awaitCompletion();
+    }
+
     startGame() {
-        // TODO fade out instead
         G.screens.pop();
 
         playSong();
+        vibrate(15);
 
         const { world } = this.worldScreen;
         const cat = firstItem(world.category('cat'));
@@ -94,19 +107,12 @@ class MainMenuScreen extends MenuScreen {
         G.runTime = 0;
     }
 
-    cycle(elapsed) {
-        super.cycle(elapsed);
-
-        // Only allow space bar
-        downKeys = {32: downKeys[32]};
-    }
-
     renderTitle() {
         ctx.wrap(() => {
             this.claw ||= (() => {
                 const claw = new ClawEffect();
-                claw.x = CANVAS_WIDTH / 2;
-                claw.y = CANVAS_HEIGHT / 3 - 20;
+                claw.x = DESIGN_WIDTH / 2;
+                claw.y = DESIGN_HEIGHT / 3 - 20;
                 claw.age = 0.5;
                 claw.angle = -PI / 6;
                 claw.scale = 12;
@@ -115,11 +121,18 @@ class MainMenuScreen extends MenuScreen {
             })();
             this.claw.render();
         });
+
         super.renderTitle();
     }
 
     render() {
-        ctx.globalAlpha = interpolate(0, 1, min(this.age - 2.1) / 0.3);
+        ctx.globalAlpha = interpolate(0, 1, min(this.age - 2.1, 1) / 0.3);
         super.render();
+
+        ctx.wrap(() => {
+            ctx.globalAlpha = 1;
+            renderTopBar(false);
+            renderVersionFooter();
+        });
     }
 }

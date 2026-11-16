@@ -1,20 +1,15 @@
-.PHONY: build
+.PHONY: build debug prod verify
 
-build: debug preprod prod
+build: debug prod
 
 debug:
 	npm run build:debug
-	npm run build:debug:mangled
-
-preprod:
-	npm run build:preprod
-	npm run zip:preprod
 
 prod:
 	npm run build:prod
-	npm run zip:prod
+
+verify:
+	npm run verify
 
 install:
-	brew install nvm || sudo apt-get install -y nodejs
-	brew install advancecomp || sudo apt-get install -y advancecomp
-	./install-ect.sh
+	npm install

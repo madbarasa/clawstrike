@@ -52,11 +52,24 @@ class Structure extends Entity {
 
         const camera = firstItem(this.world.category('camera'));
 
-        const minX = max(this.x, camera.actual.x - CANVAS_WIDTH / 2) + CELL_SIZE;
-        const minY = max(this.y, camera.actual.y - CANVAS_HEIGHT / 2) + CELL_SIZE;
+        const halfWidth = CANVAS_WIDTH / camera.renderZoom / 2;
+        const halfHeight = CANVAS_HEIGHT / camera.renderZoom / 2;
 
-        const maxX = min(this.x + this.width, camera.actual.x + CANVAS_WIDTH / 2) - CELL_SIZE;
-        const maxY = min(this.y + this.height, camera.actual.y + CANVAS_HEIGHT / 2) - CELL_SIZE;
+        // 视口之外的墙体整块跳过，移动端能省下大量填充
+        if (this.x > camera.renderX + halfWidth ||
+            this.y > camera.renderY + halfHeight ||
+            this.x + this.width < camera.renderX - halfWidth ||
+            this.y + this.height < camera.renderY - halfHeight) {
+            this.culled = true;
+            return;
+        }
+        this.culled = false;
+
+        const minX = max(this.x, camera.renderX - halfWidth) + CELL_SIZE;
+        const minY = max(this.y, camera.renderY - halfHeight) + CELL_SIZE;
+
+        const maxX = min(this.x + this.width, camera.renderX + halfWidth) - CELL_SIZE;
+        const maxY = min(this.y + this.height, camera.renderY + halfHeight) - CELL_SIZE;
 
         ctx.fillStyle = this.color;
         ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
@@ -64,7 +77,7 @@ class Structure extends Entity {
         ctx.globalAlpha = 0.05;
         ctx.fillStyle = BACKGROUND_STRIPES;
 
-        const offsetY = this.age * 30;
+        const offsetY = this.age * 30 % BACKGROUND_STRIPES.height;
         const offsetX = offsetY * BACKGROUND_STRIPES.width / BACKGROUND_STRIPES.height;
 
         ctx.translate(offsetX, offsetY);
@@ -73,6 +86,7 @@ class Structure extends Entity {
 
     render() {
         if (!this.matrix) return;
+        if (this.culled) return;
 
         const rows = this.matrix.length;
         const cols = this.matrix[0].length;

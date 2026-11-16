@@ -19,6 +19,7 @@ class Cat extends Entity {
 
     rolling = false;
     rollingAge = 0;
+    rollingReleased = true;
 
     releasedJump = false;
     jumpStartAge = -9;
@@ -45,6 +46,12 @@ class Cat extends Entity {
 
         this.hitbox.width = this.radiusX * 2;
         this.hitbox.height = this.radiusY * 2;
+
+        this.previousX = this.x;
+        this.previousY = this.y;
+
+        // 出生时视为已经落地，避免开局第一帧悬空
+        this.lastLanded = 0;
     }
 
     get attackHitbox() {
@@ -56,12 +63,40 @@ class Cat extends Entity {
         return this.cachedAttackHitbox;
     }
 
+    // 贴墙判定只看当前帧状态，起跳瞬间立即失效，落地后不会残留吸附记录
+    get stickingToWall() {
+        if (this.landed) return false;
+        if (!this.wallStickDirection) return false;
+        if (abs(this.x - this.wallStickX) > 6) return false;
+        return this.hasWallBeside(this.wallStickDirection);
+    }
+
+    hasWallBeside(direction) {
+        if (!direction) return false;
+
+        for (const structure of this.world.category('structure')) {
+            if (structure.cellAt(this.x + direction * (this.radiusX + 2), this.y - this.radiusY * 0.5) ||
+                structure.cellAt(this.x + direction * (this.radiusX + 2), this.y)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    canJump() {
+        return this.landed || this.stickingToWall;
+    }
+
     jump() {
         if (this.age < this.jumpEndAge) return;
         if (!this.releasedJump) return;
-        if (!this.landed && this.age - this.lastStickToWall > 0.1) return;
+
+        const fromWall = this.stickingToWall;
+        if (!fromWall && !this.landed && this.age - this.lastStickToWall > 0.12) return;
 
         zzfx(...[.2,,292,.03,.02,.07,1,.4,,131,,,,,,,,.57,.01]);
+        vibrate(8);
 
         this.jumpStartAge = this.age;
         this.releasedJump = false;
@@ -69,20 +104,27 @@ class Cat extends Entity {
         this.jumpHoldTime = 0;
         this.lastLanded = -9;
 
-        if (this.stickingToWall) {
-            this.vX = this.wallStickDirection * 400;
+        if (fromWall) {
+            this.vX = this.wallStickDirection * 520;
             this.facing = this.wallStickDirection;
         }
+
+        this.jumpEndAge = this.age + 0.12;
+
+        // 起跳即清空贴墙状态，落地后不会误打断正常起跳
+        this.wallStickX = 0;
+        this.wallStickDirection = 0;
+        this.lastStickToWall = -9;
 
         for (let i = 0 ; i < 10 ; i++) {
             const particle = this.world.addEntity(new Particle());
             particle.size = rnd(5, 10);
 
-            if (this.stickingToWall) {
-                particle.x = this.x - this.wallStickDirection * this.hitbox.width / 2 + rnd(-5, 5);
+            if (fromWall) {
+                particle.x = this.x - this.facing * this.hitbox.width / 2 + rnd(-5, 5);
                 particle.y = this.y + rnd(-1, 1) * this.hitbox.height / 2;
                 particle.animate(rnd(0.2, 0.5), {
-                    x: rnd(20, 50) * this.wallStickDirection,
+                    x: rnd(20, 50) * this.facing,
                     y: rnd(-20, -50),
                     size: -particle.size,
                 });
@@ -96,44 +138,24 @@ class Cat extends Entity {
                 });
             }
         }
-
-        this.wallStickX = 0;
-        this.wallStickDirection = 0;
-    }
-
-    get stickingToWall() {
-        if (abs(this.x - this.wallStickX) > 5) return false;
-        if (this.landed) return false;
-
-        let hasWall = false;
-        for (const structure of this.world.category('structure')) {
-            if (
-                structure.cellAt(this.x - CELL_SIZE * this.wallStickDirection, this.y)
-            ) {
-                hasWall = true;
-                break;
-            }
-        }
-
-        return hasWall;
     }
 
     cycle(elapsed) {
         super.cycle(elapsed);
 
-        if (this.age - this.lastAttack < 0.1) {
+        if (this.age - this.lastAttack < 0.08) {
             elapsed *= 0.2;
         }
 
-        // Roll behavior
-        const { rolling } = this;
-        this.rolling = downKeys[40] && (this.rolling || this.landed && this.rollingReleased);
+        // 翻滚：按下即翻滚，落地后需要松手才能再次翻滚
+        const wasRolling = this.rolling;
+        this.rolling = held(KEY_DOWN) && (this.rolling || this.rollingReleased);
 
-        if (this.rolling && !rolling) {
+        if (this.rolling && !wasRolling) {
             zzfx(...[.2,0,800,.04,.21,.25,,.5,,30,,,,,16,,,.62,.2,,829]);
         }
 
-        if (!downKeys[40]) {
+        if (!held(KEY_DOWN)) {
             this.rollingReleased = true;
         }
 
@@ -144,67 +166,61 @@ class Cat extends Entity {
             this.rollingAge = 0;
         }
 
-        // Left-right movement
+        // 左右移动
         {
             let x = 0;
-            if (downKeys[37]) x = -1;
-            if (downKeys[39]) x = 1;
+            if (held(KEY_LEFT)) x = -1;
+            if (held(KEY_RIGHT)) x = 1;
             if (this.rolling) x = x || this.facing;
 
             const resisting = x && sign(x) !== sign(this.vX);
             const pushing = x && !resisting;
 
-            {
-                let targetVX;
-                let acceleration;
-                if (this.rolling) {
+            let targetVX;
+            let acceleration;
+
+            if (this.rolling) {
+                acceleration = 8000;
+                targetVX = 600 * x;
+            } else if (this.landed) {
+                if (resisting) {
                     acceleration = 8000;
-                    targetVX = 600 * x;
-                } else if (this.landed) {
-                    if (resisting) {
-                        acceleration = 8000;
-                    } else if (pushing) {
-                        acceleration = 2000;
-                    } else {
-                        acceleration = 3000;
-                    }
-
-                    // More friction when on edge
-                    for (const structure of this.world.category('structure')) {
-                        if (!structure.cellAt(this.x + this.radiusX, this.y + CELL_SIZE) ||
-                            !structure.cellAt(this.x - this.radiusX, this.y + CELL_SIZE)) {
-                                if (!x) acceleration *= 5;
-                        }
-                    }
-
-                    targetVX = 400 * x;
+                } else if (pushing) {
+                    acceleration = 2000;
                 } else {
-                    if (resisting) {
-                        acceleration = 3000;
-                    } else if (pushing) {
-                        acceleration = 2000;
-                    } else {
-                        acceleration = 1000;
-                    }
-
-                    targetVX = 600 * x;
+                    acceleration = 3000;
                 }
 
-                // if (pushing) {
-                //     targetVX = x * max(abs(targetVX), abs(this.vX));
-                // }
+                // 在边缘停下时摩擦力更强，避免滑出平台
+                for (const structure of this.world.category('structure')) {
+                    if (!structure.cellAt(this.x + this.radiusX, this.y + CELL_SIZE) ||
+                        !structure.cellAt(this.x - this.radiusX, this.y + CELL_SIZE)) {
+                        if (!x) acceleration *= 5;
+                    }
+                }
 
-                this.vX += between(-elapsed * acceleration, targetVX - this.vX, elapsed * acceleration);
+                targetVX = 400 * x;
+            } else {
+                if (resisting) {
+                    acceleration = 3000;
+                } else if (pushing) {
+                    acceleration = 2000;
+                } else {
+                    acceleration = 1000;
+                }
+
+                targetVX = 600 * x;
             }
 
-            // const speed = (this.rolling ? 600 : 400) * x;
+            this.vX += between(-elapsed * acceleration, targetVX - this.vX, elapsed * acceleration);
             this.x += this.vX * elapsed;
             this.walking = !!x;
 
             if (!this.stickingToWall) this.facing = x || this.facing;
         }
 
-        if (downKeys[38]) {
+        // 跳跃：按住蓄力，松开后才能再次起跳
+        if (held(KEY_UP)) {
             if (!this.releasedJump) {
                 this.jumpHoldTime += elapsed;
             }
@@ -214,23 +230,22 @@ class Cat extends Entity {
             this.releasedJump = true;
         }
 
-        const { isRising, currentY } = this.jumpData();
-        if (isRising) {
-            // Rising
-            this.y = currentY;
+        const jumpState = this.jumpData();
+        if (jumpState.isRising) {
+            this.y = jumpState.currentY;
             this.vY = 0;
         } else {
-            // Falling
+            // 贴墙时下坠更慢，方便连续蹬墙
             this.y += this.vY * elapsed;
-            this.vY += elapsed * (this.stickingToWall ? 100 : 2000);
+            this.vY += elapsed * (this.stickingToWall ? 220 : 2600);
         }
 
-        let targetAngle = 0;
+        let targetAngle;
         let angleSpeed = PI * 2;
         if (this.landed) {
             targetAngle = 0;
             angleSpeed *= 4;
-        } else if (isRising) {
+        } else if (jumpState.isRising) {
             targetAngle = -PI / 3;
         } else {
             targetAngle = PI / 4;
@@ -239,7 +254,7 @@ class Cat extends Entity {
         const angleDiff = normalizeAngle(targetAngle - this.viewAngle);
         this.viewAngle += between(-elapsed * angleSpeed, angleDiff, elapsed * angleSpeed);
 
-        if (!downKeys[32]) {
+        if (!held(KEY_ATTACK)) {
             this.releasedAttack = true;
         } else if (this.attackCooldown <= 0 && this.releasedAttack && !this.rolling) {
             this.attack();
@@ -265,20 +280,8 @@ class Cat extends Entity {
         }
 
         if (this.landed && !landed) {
-            for (let i = 0 ; i < 10 ; i++) {
-                const particle = this.world.addEntity(new Particle());
-                particle.x = this.x - rnd(-1, 1) * this.hitbox.width / 2;
-                particle.y = this.y + this.hitbox.height / 2;
-                particle.size = rnd(5, 10);
-
-                particle.animate(rnd(0.2, 0.5), {
-                    x: rnd(-40, 40),
-                    y: rnd(-20, -50),
-                    size: -particle.size,
-                });
-            }
-
-            zzfx(...[.05,,339,.01,.01,,4,4.4,11,-6,-486,.09,,,,,,.64,.03,.2]); // Blip 426
+            this.spawnLandingParticles();
+            zzfx(...[.05,,339,.01,.01,,4,4.4,11,-6,-486,.09,,,,,,.64,.03,.2]);
         }
 
         if (x !== this.x) {
@@ -287,40 +290,40 @@ class Cat extends Entity {
                 this.vX = 0;
             }
 
-            if (!this.stickingToWall) {
-                if (y === this.y && !this.landed && this.facing !== readjustmentDirection) {
-                    this.wallStickX = this.x;
-                    this.wallStickDirection = readjustmentDirection;
-                }
+            if (!this.stickingToWall &&
+                y === this.y &&
+                !this.landed &&
+                readjustmentDirection &&
+                this.hasWallBeside(readjustmentDirection)) {
+                this.wallStickX = this.x;
+                this.wallStickDirection = readjustmentDirection;
             }
 
             if (this.rolling && sign(this.x - x) !== this.facing) {
                 this.rolling = false;
-
                 this.vX = sign(this.x - x) * 400;
-                zzfx(...[5,,27,.03,.01,.03,3,.8,,,,,.01,,128,.9,.08,.69,.01,.21,110]); // Blip 471
-                // zzfx(...[0.3,,365,.01,.04,.13,3,2.9,,-17,,,,1.3,41,,.08,.54,.03,,923]); // Hit 508
-                // this.x += sign(this.x - x) * 25;
+                zzfx(...[5,,27,.03,.01,.03,3,.8,,,,,.01,,128,.9,.08,.69,.01,.21,110]);
             }
         }
 
-        if (!this.stickingToWall || downKeys[40]) {
+        if (!this.stickingToWall || held(KEY_DOWN)) {
             this.wallStickX = 0;
+            this.wallStickDirection = 0;
         } else {
             this.viewAngle = -PI / 2;
             this.lastStickToWall = this.age;
         }
 
-        if (this.releasedMeow && downKeys[69] && this.age - (this.lastMeow || 0) > 0.3) {
+        if (this.releasedMeow && held(KEY_MEOW) && this.age - (this.lastMeow || 0) > 0.3) {
             this.releasedMeow = false;
             this.lastMeow = this.age;
-            zzfx(...[.5,,282,.02,.03,,2,4,,,,,,1,,,,.78,.03]); // Jump 1017
+            zzfx(...[.5,,282,.02,.03,,2,4,,,,,,1,,,,.78,.03]);
             const meow = this.world.addEntity(new MeowEffect());
             meow.x = this.x;
             meow.y = this.y;
         }
 
-        this.releasedMeow ||= !downKeys[69];
+        this.releasedMeow ||= !held(KEY_MEOW);
 
         if (this.rolling && this.landed && this.age - (this.lastRollParticle || 0) > 1 / 60) {
             this.lastRollParticle = this.age;
@@ -332,6 +335,21 @@ class Cat extends Entity {
 
             particle.animate(rnd(0.2, 0.5), {
                 x: rnd(-10, 10),
+                y: rnd(-20, -50),
+                size: -particle.size,
+            });
+        }
+    }
+
+    spawnLandingParticles() {
+        for (let i = 0 ; i < 10 ; i++) {
+            const particle = this.world.addEntity(new Particle());
+            particle.x = this.x - rnd(-1, 1) * this.hitbox.width / 2;
+            particle.y = this.y + this.hitbox.height / 2;
+            particle.size = rnd(5, 10);
+
+            particle.animate(rnd(0.2, 0.5), {
+                x: rnd(-40, 40),
                 y: rnd(-20, -50),
                 size: -particle.size,
             });
@@ -350,11 +368,7 @@ class Cat extends Entity {
 
         this.nextHeatReset = 0.5;
         this.heat++;
-        if (this.heat >= 6) {
-            this.attackCooldown = 0.5;
-        } else {
-            this.attackCooldown = 0.1;
-        }
+        this.attackCooldown = this.heat >= 6 ? 0.5 : 0.1;
 
         let target;
         for (const human of this.world.category('human')) {
@@ -371,20 +385,21 @@ class Cat extends Entity {
         attack.x = this.x + this.facing * 60;
         attack.y = this.y;
 
-        zzfx(...[0.1,,170,.04,.04,.06,1,1.8,25,4,,,,5,,,,.85,.01]); // Jump 62
+        zzfx(...[0.1,,170,.04,.04,.06,1,1.8,25,4,,,,5,,,,.85,.01]);
 
         attack.x += rnd(-15, 15);
         attack.y += rnd(-25, 25);
 
         const angle = target ? angleBetween(this, target) : atan2(0, this.facing);
-        const dist = min(10, target ? distance(this, target) : 99);
-        this.x += dist * cos(angle);
-        this.y += max(0, dist * sin(angle));
+        const distanceToTarget = min(10, target ? distance(this, target) : 99);
+        this.x += distanceToTarget * cos(angle);
+        this.y += max(0, distanceToTarget * sin(angle));
     }
 
     damage() {
         firstItem(this.world.category('camera')).shake(0.1, 10);
-        zzfx(...[1.1,,339,,.01,.05,1,2.4,-6,2,,,.09,1.1,,.5,,.67,.1]); // Hit 222
+        zzfx(...[1.1,,339,,.01,.05,1,2.4,-6,2,,,.09,1.1,,.5,,.67,.1]);
+        vibrate(40);
 
         this.lastDamage = this.age;
 
@@ -393,19 +408,12 @@ class Cat extends Entity {
             particleCount = 100;
 
             this.world.removeEntity(this);
-            zzfx(...[2,,69,.02,.17,.55,4,3.3,2,,,,,1,,.1,.2,.4,.15]); // Explosion 128
+            zzfx(...[2,,69,.02,.17,.55,4,3.3,2,,,,,1,,.1,.2,.4,.15]);
         }
 
-        fireworks(
-            this.world,
-            this,
-            particleCount,
-            this.radiusX,
-            this.radiusY,
-        );
+        fireworks(this.world, this, particleCount, this.radiusX, this.radiusY);
 
         this.world.addEntity(new Flash('#fff')).interp('alpha', 0.5, 0, 0.2);
-        // TODO maybe should clean up the flash? eh not much of a perf hit
     }
 
     jumpData() {
@@ -417,17 +425,14 @@ class Cat extends Entity {
         const riseProgress = between(0, (this.age - this.jumpStartAge) / riseDuration, 1);
 
         const isRising = riseProgress < 1;
-
         const currentY = -easeOutSine(riseProgress) * jumpHeight + this.jumpStartY;
 
         return { peakY, isRising, currentY, jumpAge: this.age - this.jumpStartAge };
     }
 
     render() {
-        ctx.translate(this.x, this.y);
-
+        ctx.translate(this.renderX, this.renderY);
         ctx.scale(this.facing, 1);
-
         ctx.rotate(this.viewAngle);
 
         if (this.stickingToWall) ctx.translate(0, 10);
@@ -439,7 +444,7 @@ class Cat extends Entity {
 
         ctx.fillStyle = ctx.strokeStyle = this.age - this.lastDamage < 0.1 ? '#fff' : this.color;
 
-        // Body
+        // 身体
         ctx.wrap(() => {
             ctx.lineWidth = CAT_BODY_THICKNESS;
             ctx.lineJoin = nomangle('square');
@@ -472,26 +477,25 @@ class Cat extends Entity {
             ? sin(this.age * 3 * PI * 2) * PI / 4 * (this.stickingToWall ? 0.5 : 1)
             : 0;
 
-        // Legs
+        // 腿
         const legSettings = [
             [CAT_BODY_LENGTH / 2 - CAT_LEG_THICKNESS / 2, frontLegsBaseAngle + legsWalkAngle],
             [CAT_BODY_LENGTH / 2 - CAT_LEG_THICKNESS / 2 - 5, frontLegsBaseAngle - legsWalkAngle],
             [-CAT_BODY_LENGTH / 2 + CAT_LEG_THICKNESS / 2, backLegsBaseAngle - legsWalkAngle],
             [-CAT_BODY_LENGTH / 2 + CAT_LEG_THICKNESS / 2 + 5, backLegsBaseAngle + legsWalkAngle],
         ];
+
         if (this.age - this.lastAttack < CAT_ATTACK_ANIMATION_DURATION) {
             const progress = (this.age - this.lastAttack) / CAT_ATTACK_ANIMATION_DURATION;
-            const startAngle = -PI / 3;
-            const endAngle = PI / 2;
-            legSettings[0][1] = interpolate(startAngle, endAngle, progress);
+            legSettings[0][1] = interpolate(-PI / 3, PI / 2, progress);
         }
 
-        for (const [x, angle] of legSettings) {
+        for (const [legX, angle] of legSettings) {
             ctx.wrap(() => {
                 ctx.lineCap = 'round';
                 ctx.lineWidth = CAT_LEG_THICKNESS;
 
-                ctx.translate(x, CAT_BODY_THICKNESS / 2 - CAT_LEG_THICKNESS / 2);
+                ctx.translate(legX, CAT_BODY_THICKNESS / 2 - CAT_LEG_THICKNESS / 2);
                 ctx.rotate(angle);
                 ctx.beginPath();
                 ctx.moveTo(0, 0);
@@ -500,7 +504,7 @@ class Cat extends Entity {
             });
         }
 
-        // Tail
+        // 尾巴
         ctx.wrap(() => {
             if (this.rolling) {
                 ctx.translate(-CAT_BODY_LENGTH / 2 + CAT_TAIL_THICKNESS / 2 + 4, CAT_BODY_THICKNESS / 2 - 4);
@@ -515,14 +519,14 @@ class Cat extends Entity {
             ctx.beginPath();
             ctx.moveTo(-10, 0);
             const phase = this.age * PI * (this.walking ? 5 : 0.5);
-            for (let x = 0 ; x < CAT_TAIL_LENGTH; x += 4) {
-                const amplitudeFactor = x / CAT_TAIL_LENGTH;
-                ctx.lineTo(x, sin(x / CAT_TAIL_LENGTH * PI * 2 + phase) * 5 * amplitudeFactor);
+            for (let tailX = 0 ; tailX < CAT_TAIL_LENGTH; tailX += 4) {
+                const amplitudeFactor = tailX / CAT_TAIL_LENGTH;
+                ctx.lineTo(tailX, sin(tailX / CAT_TAIL_LENGTH * PI * 2 + phase) * 5 * amplitudeFactor);
             }
             ctx.stroke();
         });
 
-        // Head
+        // 头
         ctx.wrap(() => {
             ctx.translate(CAT_BODY_LENGTH / 2 - 5, 0);
 
@@ -556,7 +560,7 @@ class Cat extends Entity {
 renderCatHead = (blink) => {
     ctx.fillRect(-CAT_HEAD_WIDTH / 2, -CAT_HEAD_HEIGHT / 2, CAT_HEAD_WIDTH, CAT_HEAD_HEIGHT);
 
-    // Eyes
+    // 眼睛
     if (!blink) ctx.wrap(() => {
         ctx.fillStyle = '#fff';
         ctx.beginPath();
@@ -573,7 +577,7 @@ renderCatHead = (blink) => {
         ctx.fill();
     });
 
-    // Ears
+    // 耳朵
     ctx.beginPath();
     ctx.moveTo(CAT_HEAD_WIDTH / 2, -CAT_HEAD_HEIGHT / 2);
     ctx.lineTo(CAT_HEAD_WIDTH / 2 + CAT_EAR_LENGTH, -CAT_HEAD_HEIGHT / 2);

@@ -6,7 +6,7 @@ class Particle extends Entity {
 
     render() {
         ctx.globalAlpha = this.alpha;
-        ctx.translate(this.x, this.y);
+        ctx.translate(this.renderX, this.renderY);
         ctx.fillStyle = '#fff';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 1;

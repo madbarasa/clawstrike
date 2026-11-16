@@ -29,7 +29,7 @@ class Spikes extends Entity {
 
     render() {
         ctx.fillStyle = '#000';
-        ctx.translate(this.x, this.y);
+        ctx.translate(this.renderX, this.renderY);
         ctx.rotate(this.angle);
 
         ctx.wrap(() => {

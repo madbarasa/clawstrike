@@ -51,7 +51,7 @@ class Bullet extends Entity {
     }
 
     render() {
-        ctx.translate(this.x, this.y);
+        ctx.translate(this.renderX, this.renderY);
         ctx.rotate(this.angle);
 
         // ctx.shadowColor = '#000';

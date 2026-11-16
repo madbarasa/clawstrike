@@ -13,15 +13,17 @@ class World {
     render() {
         this.entities.sort((a, b) => a.z - b.z);
 
+        const camera = firstItem(this.category('camera'));
+        const zoom = camera.renderZoom;
+
         ctx.wrap(() => {
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, can.width, can.height);
 
-            const camera = firstItem(this.category('camera'));
-            ctx.scale(camera.zoom, camera.zoom);
+            ctx.scale(zoom, zoom);
             ctx.translate(
-                CANVAS_WIDTH / 2 / camera.zoom - camera.actual.x,
-                CANVAS_HEIGHT / 2 / camera.zoom - camera.actual.y,
+                CANVAS_WIDTH / 2 / zoom - camera.renderX,
+                CANVAS_HEIGHT / 2 / zoom - camera.renderY,
             );
 
             for (const entity of this.entities) {
@@ -29,6 +31,8 @@ class World {
             }
 
             for (const entity of this.entities) {
+                // HUD 由世界界面单独绘制，这里不重复绘制
+                if (entity.categories.includes('hud')) continue;
                 ctx.wrap(() => entity.render());
             }
 
@@ -64,6 +68,8 @@ class World {
     }
 
     category(categoryId) {
-        return this.categories[categoryId] || new Set();
+        return this.categories[categoryId] || EMPTY_CATEGORY;
     }
 }
+
+EMPTY_CATEGORY = new Set();

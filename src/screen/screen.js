@@ -11,23 +11,45 @@ class Screen {
 
     addCommand(label, detect, action, playSound = true) {
         this.commands.push({ label, detect, action, playSound });
+        return this;
     }
 
-    addDifficultyChangeCommand() {
-        this.addCommand(
-            () => nomangle('PRESS [K] TO SET DIFFICULTY ') + '(' + G.difficulty.label + ')',
-            () => downKeys[75],
-            () => {
-                const currentIndex = DIFFICULTIES.indexOf(G.difficulty);
-                if (currentIndex >= 0) G.difficulty = DIFFICULTIES[(currentIndex + 1) % DIFFICULTIES.length];
-            }
+    // 键盘与触摸两套提示文案，触摸端只展示图标与中文标签
+    addCommandWithHints(keyboardLabel, touchHint, detect, action, playSound = true) {
+        this.commands.push({
+            label: inputMode == INPUT_MODE_TOUCH ? '' : keyboardLabel,
+            touchHint: inputMode == INPUT_MODE_TOUCH ? touchHint : null,
+            detect,
+            action,
+            playSound,
+        });
+        return this;
+    }
+
+    addDifficultyCycleCommands() {
+        const cycleDifficulty = () => {
+            const currentIndex = DIFFICULTIES.indexOf(G.difficulty);
+            if (currentIndex >= 0) G.difficulty = DIFFICULTIES[(currentIndex + 1) % DIFFICULTIES.length];
+        };
+
+        // 键盘按住轮询，触摸端点一次虚拟按键只切换一次
+        this.addCommandWithHints(
+            '按 [K] 切换难度',
+            { icon: 'settings', text: '切换难度' },
+            () => (inputMode == INPUT_MODE_KEYBOARD
+                ? held(KEY_DIFFICULTY)
+                : pressed(KEY_DIFFICULTY)),
+            cycleDifficulty,
         );
     }
 
-    addMainMenuCommand() {
-        this.addCommand(
-            nomangle('PRESS [M] TO RETURN TO MAIN MENU'),
-            () => downKeys[77],
+    addMainMenuCommands() {
+        this.addCommandWithHints(
+            '按 [M] 返回主菜单',
+            { icon: 'arrow-left', text: '返回主菜单' },
+            () => (inputMode == INPUT_MODE_KEYBOARD
+                ? held(KEY_MENU)
+                : pressed(KEY_MENU)),
             () => G.startNavigation(),
         );
     }
@@ -54,31 +76,97 @@ class Screen {
     }
 
     awaitCompletion() {
-        return new Promise((resolve, reject) => {
-            this.resolvers = { resolve, reject };
+        this.completion = new Promise((resolve, reject) => {
+            this.resolvers = {
+                resolve: () => {
+                    this.completion.__state = 'resolved';
+                    resolve();
+                },
+                reject: (error) => {
+                    this.completion.__state = 'rejected';
+                    reject(error);
+                },
+            };
         });
+        this.completion.__state = 'pending';
+        return this.completion;
+    }
+
+    // 是否显示游戏内 HUD：只有最上层界面是游戏界面时才绘制
+    get showsHud() {
+        return false;
     }
 
     cycle(elapsed) {
         this.age += elapsed;
 
-        if (Object.values(downKeys).filter(x => x).length == 0 && !TOUCH_DOWN) {
-            this.releasedCommand = true;
+        if (!TOUCH_DOWN) {
+            let keyboardIdle = true;
+            for (const key in downKeys) {
+                if (downKeys[key]) keyboardIdle = false;
+            }
+            if (keyboardIdle) this.releasedCommand = true;
         }
 
         if (this.releasedCommand && this.isForeground()) {
-            for (const { detect, action, playSound } of this.commands) {
-                if (detect?.()) {
-                    if (playSound) zzfx(...[.5,,500,,.02,.14,,3.2,,,325,.05,.03,,,,,.79,.04,,-1129]); // Pickup 819
-                    this.releasedCommand = false;
-                    action();
+            const command = this.commands.find(({ detect }) => detect?.());
+            if (command) {
+                if (command.playSound) {
+                    zzfx(...[.5,,500,,.02,.14,,3.2,,,325,.05,.03,,,,,.79,.04,,-1129]);
+                    vibrate(10);
                 }
+                this.releasedCommand = false;
+                command.action();
             }
         }
 
         if (this.isForeground()) {
-            setSongVolume(this.songVolume * (document.hasFocus() ? 1 : 0));
+            setSongLevel(this.songVolume * (document.hasFocus() ? 1 : 0));
         }
+    }
+
+    renderCommandHints(baseY) {
+        const hints = this.commands.filter(command => command.touchHint);
+        if (!hints.length) return;
+
+        const spacing = 78;
+        let y = baseY - ((hints.length - 1) * spacing) / 2;
+
+        for (const command of hints) {
+            ctx.wrap(() => {
+                ctx.globalAlpha = this.age % 2 < 1.5 || !command.detect ? 1 : 0.45;
+                renderTouchHint(command.touchHint, DESIGN_WIDTH / 2 - 130, y, 62);
+            });
+            y += spacing;
+        }
+    }
+
+    renderKeyboardCommands(baseY) {
+        const labels = this.commands.filter(command => command.label);
+        if (!labels.length) return;
+
+        let y = baseY - ((labels.length - 1) * COMMAND_SPACING) / 2;
+
+        for (const { label, detect } of labels) {
+            if (this.age % 2 < 1.5 || !detect) {
+                ctx.wrap(() => this.renderCommandText(typeof label === 'function' ? label() : label, y));
+            }
+            y += COMMAND_SPACING;
+        }
+    }
+
+    renderCommandText(line, y) {
+        ctx.globalAlpha = 1;
+        ctx.font = uiFont(34);
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.textBaseline = nomangle('middle');
+        ctx.lineWidth = 7;
+        ctx.lineJoin = 'round';
+        ctx.textAlign = nomangle('center');
+
+        ctx.strokeText(line, DESIGN_WIDTH / 2, y);
+        ctx.fillText(line, DESIGN_WIDTH / 2, y);
     }
 
     render() {
@@ -110,15 +198,15 @@ class TransitionScreen extends Screen {
     }
 
     render() {
-        ctx.translate(interpolate(this.from, this.to, this.progress) * (CANVAS_WIDTH + 200), 0);
+        ctx.translate(interpolate(this.from, this.to, this.progress) * (DESIGN_WIDTH + 200), 0);
 
         ctx.fillStyle = '#000';
         ctx.beginPath();
-        ctx.fillRect(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, 20, 20);
+        ctx.fillRect(DESIGN_WIDTH / 2, DESIGN_HEIGHT / 2, 20, 20);
         ctx.moveTo(0, 0);
-        ctx.lineTo(CANVAS_WIDTH + 200, 0);
-        ctx.lineTo(CANVAS_WIDTH, CANVAS_HEIGHT);
-        ctx.lineTo(-200, CANVAS_HEIGHT);
+        ctx.lineTo(DESIGN_WIDTH + 200, 0);
+        ctx.lineTo(DESIGN_WIDTH, DESIGN_HEIGHT);
+        ctx.lineTo(-200, DESIGN_HEIGHT);
         ctx.fill();
     }
 }

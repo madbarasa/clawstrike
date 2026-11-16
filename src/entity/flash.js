@@ -11,6 +11,6 @@ class Flash extends Entity {
         this.cancelCamera();
         ctx.globalAlpha = this.alpha;
         ctx.fillStyle = this.color;
-        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.fillRect(-1, -1, CANVAS_WIDTH + 2, CANVAS_HEIGHT + 2);
     }
 }

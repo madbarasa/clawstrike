@@ -1,5 +1,13 @@
 {
-    "compilerOptions": {},
-    "include": ["src/**/*"],
-    "exclude": ["node_modules"]
+    "compilerOptions": {
+        "target": "ES2022",
+        "lib": ["ES2022", "DOM"],
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "allowJs": true,
+        "checkJs": false,
+        "noEmit": true,
+        "skipLibCheck": true
+    },
+    "include": ["src/**/*.js"]
 }

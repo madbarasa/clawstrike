@@ -3,9 +3,10 @@ class StoryScreen extends WorldScreen {
         super(INTRO_LEVEL);
 
         const camera = firstItem(this.world.category('camera'));
-        camera.x = CELL_SIZE * 6;
-        camera.y = CELL_SIZE * 2;
+        camera.x = camera.previousX = CELL_SIZE * 6;
+        camera.y = camera.previousY = CELL_SIZE * 2;
         camera.zoom = 3;
+        camera.previousZoom = 3;
     }
 
     async fadeIn() {
@@ -25,7 +26,9 @@ class StoryScreen extends WorldScreen {
         const camera = firstItem(this.world.category('camera'));
         this.removeAllEntities();
 
-        if (inputMode == INPUT_MODE_TOUCH) camera.zoom = 1.3;
+        if (inputMode == INPUT_MODE_TOUCH) {
+            camera.zoom = camera.previousZoom = 1.3;
+        }
 
         const label = this.world.addEntity(new Label(message));
         label.x = camera.x;
@@ -74,23 +77,25 @@ class IntroScreen extends StoryScreen {
         this.owner.y = this.enemy.y = CELL_SIZE * 2;
         this.owner.health = 1;
 
-        this.addCommand(
-            '',
-            () => downKeys[13],
+        this.addCommandWithHints(
+            '按 [回车] 跳过',
+            { icon: 'play', text: '轻触跳过' },
+            () => held(KEY_ENTER) || TOUCH_TAPPED,
             () => this.resolve(),
         );
 
         (async () => {
             await this.fadeIn();
 
-            // Shoot and wait for the owner to take damage
+            // 朝主人开一枪，等待主人受伤
             this.enemy.shoot();
             while (this.owner.health) await this.enemy.interp('_', 0, 0, 0);
+
             this.removeAllEntities();
 
             await this.world.addEntity(new Flash('#fff')).interp('alpha', 1, 0, 2);
 
-            await this.finalize(nomangle('AVENGE YOUR HOOMAN'));
+            await this.finalize('为你的铲屎官复仇');
         })();
     }
 
@@ -106,14 +111,18 @@ class IntroScreen extends StoryScreen {
 
     render() {
         ctx.wrap(() => super.render());
-        ctx.wrap(() => {
-            ctx.fillStyle = '#fff';
-            ctx.font = nomangle('bold 32px Impact');
-            ctx.textAlign = nomangle('right');
-            ctx.textBaseline = nomangle('bottom');
 
-            ctx.translate(CANVAS_WIDTH - 20, CANVAS_HEIGHT - 20);
-            ctx.drawCommandText(nomangle('[ENTER] SKIP'));
+        ctx.wrap(() => {
+            ctx.globalAlpha = this.age % 2 < 1.5 ? 1 : 0.4;
+            if (inputMode == INPUT_MODE_TOUCH) {
+                renderTouchHint({ icon: 'play', text: '轻触跳过' }, DESIGN_WIDTH - 380, DESIGN_HEIGHT - 60, 56);
+            } else {
+                renderPanelText('按 [回车] 跳过', DESIGN_WIDTH - 30, DESIGN_HEIGHT - 40, 28, {
+                    align: 'right',
+                    baseline: 'bottom',
+                    strokeWidth: 5,
+                });
+            }
         });
     }
 }
@@ -123,20 +132,20 @@ class RevengeScreen extends StoryScreen {
         super();
 
         this.cat = this.world.addEntity(new Cat());
-        this.cat.x = CELL_SIZE * 4;
+        this.cat.x = this.cat.previousX = CELL_SIZE * 4;
 
         this.enemy = this.world.addEntity(new Human());
         this.enemy.x = CELL_SIZE * 8;
 
         this.cat.color = this.enemy.color = '#fff';
-        this.cat.y = this.enemy.y = CELL_SIZE * 2;
+        this.cat.y = this.cat.previousY = this.enemy.y = CELL_SIZE * 2;
 
         this.world.addEntity(new HUD(this.cat));
 
         (async () => {
             await this.fadeIn();
 
-            const label = this.world.addEntity(new Label(nomangle('COMPLETE YOUR VENGEANCE')));
+            const label = this.world.addEntity(new Label('完成复仇'));
             label.x = CELL_SIZE * 6;
             label.y = CELL_SIZE / 2;
             label.z = 99;
@@ -146,7 +155,7 @@ class RevengeScreen extends StoryScreen {
             await this.world.addEntity(new Flash('#000')).interp('alpha', 0, 1, 0.4);
 
             this.enemy.health = 1;
-            this.finalize(nomangle('VENGEANCE COMPLETE'));
+            this.finalize('复仇完成');
         })();
     }
 

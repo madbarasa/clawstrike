@@ -59,19 +59,26 @@ class Human extends Entity {
     }
 
     canSee(target) {
-        for (const structure of this.world.category('structure')) {
-            for (const eye of this.eyes) {
-                const distanceToTarget = distance(eye, target);
-                if (distanceToTarget > this.visionDistance) return false;
+        for (const eye of this.eyes) {
+            const distanceToTarget = distance(eye, target);
+            if (distanceToTarget > this.visionDistance) continue;
 
-                const angleToTarget = angleBetween(eye, target);
+            const angleToTarget = angleBetween(eye, target);
+
+            // 两只眼睛的射线合并到同一次遍历，命中任一结构体即视为被遮挡
+            let blocked = false;
+            for (const structure of this.world.category('structure')) {
                 const impact = structure.raycaster.castRay(eye.x, eye.y, angleToTarget, distanceToTarget);
                 if (impact && distance(eye, impact) < distanceToTarget - 10) {
-                    return false;
+                    blocked = true;
+                    break;
                 }
             }
+
+            if (!blocked) return true;
         }
-        return true;
+
+        return false;
     }
 
     get confused() {
@@ -241,7 +248,7 @@ class Human extends Entity {
     }
 
     render() {
-        ctx.translate(this.x, this.y);
+        ctx.translate(this.renderX, this.renderY);
         ctx.scale(this.facing, 1);
 
         ctx.fillStyle = this.age - this.lastDamage < 0.1 ? '#fff' : this.color;
@@ -301,12 +308,13 @@ class Human extends Entity {
             ctx.scale(this.facing, 1);
 
             ctx.fillStyle = '#fff';
-            ctx.font = 'bold 40px Arial';
+            ctx.font = nomangle('bold 40px Impact');
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 4;
 
+            // 用符号表达警觉状态，不使用文字
             ctx.strokeText(this.seesCat ? '!' : '?', 0, 0);
             ctx.fillText(this.seesCat ? '!' : '?', 0, 0);
         });

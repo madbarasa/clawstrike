@@ -171,7 +171,7 @@ class LevelEditorScreen extends WorldScreen {
             ctx.shadowColor = '#000';
             ctx.shadowOffsetX = 2;
             ctx.shadowOffsetY = 2;
-            ctx.fillText('Edit mode: ' + this.editMode, CANVAS_WIDTH / 2, CANVAS_HEIGHT * 4 / 5);
+            ctx.fillText('编辑模式：' + (this.editMode == 'entity' ? '实体' : '结构'), CANVAS_WIDTH / 2, CANVAS_HEIGHT * 4 / 5);
         });
     }
 
@@ -274,11 +274,11 @@ class LevelEditorScreen extends WorldScreen {
 
     contextualActions() {
         const actions = [
-            this.contextMenuButton('Add Cat', () => this.insertEntity(new Cat())),
-            this.contextMenuButton('Add Human', () => this.insertEntity(new Human())),
-            this.contextMenuButton('Add Spikes', () => this.insertEntity(new Spikes())),
-            this.contextMenuButton('Add Water', () => this.insertEntity(new Water())),
-            this.contextMenuButton('Add Label', () => this.insertEntity(new Label('Hello world!'))),
+            this.contextMenuButton('添加猫', () => this.insertEntity(new Cat())),
+            this.contextMenuButton('添加人类', () => this.insertEntity(new Human())),
+            this.contextMenuButton('添加尖刺', () => this.insertEntity(new Spikes())),
+            this.contextMenuButton('添加水面', () => this.insertEntity(new Water())),
+            this.contextMenuButton('添加标签', () => this.insertEntity(new Label('示例文字'))),
             this.contextMenuSwatchSet([
                 this.colorSwatch('#f44'),
                 this.colorSwatch('#7d7'),
@@ -292,7 +292,7 @@ class LevelEditorScreen extends WorldScreen {
 
         if (this.selected) {
             actions.push(
-                this.contextMenuButton('Delete', () => {
+                this.contextMenuButton('删除', () => {
                     this.selected?.world?.removeEntity(this.selected);
                     this.selected = null;
                 }),
@@ -300,8 +300,8 @@ class LevelEditorScreen extends WorldScreen {
 
             if (this.selected instanceof Spikes) {
                 actions.push(
-                    this.contextMenuButton('Set angle', () => {
-                        const angle = parseInt(prompt('Angle? (in degrees)', this.selected.angle * 180 / PI));
+                    this.contextMenuButton('设置角度', () => {
+                        const angle = parseInt(prompt('角度？（单位：度）', this.selected.angle * 180 / PI));
                         const adjusted = roundToNearest(angle, 90) || 0;
                         this.selected.angle = adjusted * PI / 180;
                     }),
@@ -309,16 +309,16 @@ class LevelEditorScreen extends WorldScreen {
             }
             if (this.selected instanceof Spikes || this.selected instanceof Water) {
                 actions.push(
-                    this.contextMenuButton('Set length', () => {
-                        const length = parseInt(prompt('Length?', this.selected.length));
+                    this.contextMenuButton('设置长度', () => {
+                        const length = parseInt(prompt('长度？', this.selected.length));
                         this.selected.length = roundToNearest(length, CELL_SIZE) || this.selected.length;
                     }),
                 );
             }
             if (this.selected instanceof Water) {
                 actions.push(
-                    this.contextMenuButton('Set depth', () => {
-                        const depth = parseInt(prompt('Depth?', this.selected.depth));
+                    this.contextMenuButton('设置深度', () => {
+                        const depth = parseInt(prompt('深度？', this.selected.depth));
                         this.selected.depth = roundToNearest(depth, CELL_SIZE) || this.selected.depth;
                     }),
                 );
@@ -326,18 +326,18 @@ class LevelEditorScreen extends WorldScreen {
 
             if (this.selected instanceof Label) {
                 actions.push(
-                    this.contextMenuButton('Set text', () => {
-                        this.selected.text = prompt('Text?', this.selected.text) || this.selected.text;
+                    this.contextMenuButton('设置文字', () => {
+                        this.selected.text = prompt('文字内容？', this.selected.text) || this.selected.text;
                     }),
                 );
             }
         }
 
         actions.push(...[
-            this.contextMenuButton('Load', () => this.load()),
-            this.contextMenuButton('Save', () => this.save()),
-            this.contextMenuButton('Share Link', () => this.share()),
-            this.contextMenuButton('Test', () => this.test()),
+            this.contextMenuButton('加载', () => this.load()),
+            this.contextMenuButton('保存', () => this.save()),
+            this.contextMenuButton('分享链接', () => this.share()),
+            this.contextMenuButton('试玩', () => this.test()),
         ]);
 
         return actions;
@@ -359,7 +359,7 @@ class LevelEditorScreen extends WorldScreen {
         const serialized = serializeWorld(this.world);
         const url = `${location.protocol}/${location.host}/${location.pathname}?level=${encodeURIComponent(JSON.stringify(serialized))}`;
         navigator.clipboard.writeText(url);
-        alert('Copied link to clipboard!');
+        alert('链接已复制到剪贴板');
     }
 
     save() {
@@ -367,11 +367,11 @@ class LevelEditorScreen extends WorldScreen {
 
         navigator.clipboard.writeText(JSON.stringify(serialized));
         console.log(JSON.stringify(serialized));
-        alert('Copied to clipboard!');
+        alert('已复制到剪贴板');
     }
 
     load() {
-        const serialized = prompt('Paste the serialized world here:');
+        const serialized = prompt('在此粘贴世界数据：');
         if (!serialized) return;
 
         const json = JSON.parse(serialized);
@@ -488,6 +488,6 @@ class TestScreen extends GameplayScreen {
         ctx.shadowColor = '#000';
         ctx.shadowOffsetX = 2;
         ctx.shadowOffsetY = 2;
-        ctx.fillText('[ESC] to go back to editor'.toUpperCase(), CANVAS_WIDTH / 2, CANVAS_HEIGHT * 4 / 5);
+        ctx.fillText('按 ESC 返回编辑器', CANVAS_WIDTH / 2, CANVAS_HEIGHT * 4 / 5);
     }
 }

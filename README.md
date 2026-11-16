@@ -4,67 +4,88 @@
 
 # CLAWSTRIKE
 
-**CLAWSTRIKE** is my entry for 2025's [JS13K](https://js13kgames.com/).
-The theme for the competition was **Black Cat**.
+**CLAWSTRIKE** 是一款 2D 一条命平台跳跃游戏，最初为 2025 年 [JS13K](https://js13kgames.com/) 而作，当届主题为**黑猫**。
 
-The game is a 2D die and retry platformer. Your goal is to clear all the levels as quickly as possible by triple striking all the humans.
+玩家需要一边闪避子弹与陷阱，一边三段连击消灭所有敌人，尽快通关全部关卡。
 
-> Avenge your fallen human and cut through waves of enemies across fast-paced, punishingly fun levels. CLAWSTRIKE is a die-and-retry action game: you’ll fall often, but each retry is instant, keeping the momentum alive.
+> 为倒下的铲屎官复仇，在快节奏、高难度的关卡里一路冲杀。CLAWSTRIKE 是反复死亡、反复重来的动作游戏：你会摔很多次，但每次重来都是瞬时的，节奏不会被打断。
 >
-> Prove your skill and unlock 9 Lives Mode by completing the game.
-
-You can play the game at https://meow.tap2play.io/
+> 通关后解锁九命模式。
 
 <p align="center">
 <img src="/assets/gameplay-demo.gif">
 </p>
 
-## Build
+## 平台与语言
 
-- Install depencies: `make install`
-- Debugging: `npm start`
-- Building:
-    - Debug: `make debug`
-    - Preprod: `make preprod`
-    - Prod: `make prod`
-    - All: `make`
+- 原生支持桌面端与移动端，输入方式自动切换：桌面端使用键盘，移动端使用屏幕虚拟按键。
+- 界面语言默认且固定为中文，游戏内不出现英文文案。
 
-<p align="center">
-<img src="/assets/intro.gif">
-</p>
+## 操作
 
-## Level Editor
+| 操作 | 键盘 | 移动端虚拟按键 |
+| --- | --- | --- |
+| 左右移动 | 方向键 / A D / Q D | 左下方向键 |
+| 跳跃（可贴墙跳） | 上方向键 / W / Z | 右侧跳跃键 |
+| 翻滚 | 下方向键 / S | 右侧翻滚键 |
+| 攻击 | 空格 | 右侧攻击键 |
+| 喵叫 | E | 右侧喵叫键 |
+| 暂停 | ESC | 顶部暂停按钮 |
+| 切换难度 | K | 菜单内提示 |
+| 返回主菜单 | M | 左上返回按钮 |
+| 重试 | R | 轻触屏幕 |
 
-- Editor is available at https://meow.tap2play.io/debug.html
-- Press <kbd>E</kbd> in the main menu
-- Controls:
-    - Switch to entity mode: <kbd>1</kbd> (lets you drag things around)
-    - Switch to structure mode: <kbd>2</kbd> (lets you edit obstacles)
-    - Change color, add entity, test level, etc...: `Right click`
-- Share your level: `Right click > Share Link`
+## 构建
 
-## Tools used
+```bash
+npm install
+npm run build:debug   # 调试构建，输出 build/debug.html
+npm run build:prod    # 正式构建，输出 build/index.html
+npm run verify        # 无头流程测试 + 跳跃判定测试
+npm run shots         # 无头浏览器截图，输出到 .tools/shots
+npm run http          # 本地静态服务器
+```
+
+## 关卡编辑器
+
+- 编辑器只在调试构建中可用：运行 `npm run build:debug` 后打开 `build/debug.html`。
+- 主菜单按 `E` 进入编辑器。
+- 编辑器操作：
+    - 切换实体模式：<kbd>1</kbd>（拖拽实体）
+    - 切换结构模式：<kbd>2</kbd>（编辑方块）
+    - 换颜色、添加实体、试玩等：右键菜单
+    - 分享关卡：右键菜单「分享链接」
+
+## 使用的工具
 
 - [ZzFX](https://github.com/KilledByAPixel/ZzFX)
 - [Sonant-X](https://github.com/nicolas-van/sonant-x)
 - [Sonant-X Live](https://github.com/nicolas-van/sonant-x-live)
 
-## Song generation
+## 歌曲生成
 
-GPT-5 was used in order to generate the song. All the prompts and scripts can be found under `ai/`.
+歌曲由 GPT-5 生成，全部提示词与脚本位于 `ai/` 目录。
 
-In order to generate a new song, you'll need an API key, and add it to your `.env`:
+生成新歌曲需要 API key，写入 `.env`：
 
 ```
 OPENAI_API_KEY=<YOUR_API_KEY>
 ```
 
-Then run `npm run songwriter`. **This will cost a significant amount of tokens. Please don't burn the entire rainforest to generate songs.**
+然后运行 `npm run songwriter`。**该操作消耗大量 token，请勿滥用。**
 
-Song definition can then be found in `ai/out`, which you can then import in Sonant-X Live.
+生成结果位于 `ai/out`，可直接导入 Sonant-X Live。
 
-# License
+## 移动端适配要点
 
-Feel free to read the code but don't use it for commercial purposes. The game is the result of a lot of hard work and I wish to maintain all rights to it.
+- 主循环采用固定步长（120Hz 逻辑更新）加渲染插值，逻辑速度与屏幕刷新率解耦，避免掉帧导致的顿挫与判定漂移。
+- 画布像素按屏幕尺寸与设备像素比设置，整帧按 `UIScale` 从 1600×900 设计基准缩放，绘制、命中判定、虚拟按键共用同一套坐标。
+- 视口外的墙体整块跳过绘制，图标着色与旋转提前烘焙到离屏画布。
+- 跳跃与贴墙跳判定互不干扰：起跳瞬间清空贴墙记录，落地后不会被上一面墙的残留状态打断。
+- 音效、振动反馈与开发者名单位于设置界面。
 
-Please reach out if you wish to distribute the game on your portal.
+# 许可证
+
+代码可阅读参考，请勿用于商业用途。游戏是长期投入的成果，作者保留全部权利。
+
+如需在自有平台分发，请联系作者。

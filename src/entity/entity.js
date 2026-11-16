@@ -2,6 +2,9 @@ class Entity {
     categories = [];
     seed = random();
 
+    previousX = 0;
+    previousY = 0;
+
     constructor() {
         this.x = this.y = this.previousX = this.previousY = this.age = 0;
         this.z = 0;
@@ -12,6 +15,15 @@ class Entity {
         this.cachedHitbox.x = this.x;
         this.cachedHitbox.y = this.y;
         return this.cachedHitbox;
+    }
+
+    // 渲染插值：逻辑以固定步长推进，渲染在两个状态之间插值，杜绝帧率抖动带来的顿挫
+    get renderX() {
+        return interpolate(this.previousX ?? this.x, this.x, G?.alpha ?? 1);
+    }
+
+    get renderY() {
+        return interpolate(this.previousY ?? this.y, this.y, G?.alpha ?? 1);
     }
 
     cycle(elapsed) {
@@ -31,25 +43,28 @@ class Entity {
 
     cancelCamera() {
         const camera = firstItem(this.world.category('camera'));
+        const zoom = camera.renderZoom;
         ctx.translate(
-            camera.actual.x - (1 / camera.zoom) * CANVAS_WIDTH / 2,
-            camera.actual.y - (1 / camera.zoom) * CANVAS_HEIGHT / 2,
+            camera.renderX - (1 / zoom) * CANVAS_WIDTH / 2,
+            camera.renderY - (1 / zoom) * CANVAS_HEIGHT / 2,
         );
-        ctx.scale(1 / camera.zoom, 1 / camera.zoom);
+        ctx.scale(1 / zoom, 1 / zoom);
     }
 
     renderDebug() {
-        if (DEBUG && DEBUG_HITBOXES) this.hitbox.render();
+        if (!DEBUG) return;
 
-        if (DEBUG && DEBUG_HITBOXES) ctx.wrap(() => {
+        if (DEBUG_HITBOXES) this.hitbox.render();
+
+        if (DEBUG_HITBOXES) ctx.wrap(() => {
             this.cancelCamera();
 
             const cornerRadius = 10;
             ctx.fillStyle = '#fff';
-            ctx.fillRect(-cornerRadius, -cornerRadius ,cornerRadius * 2, cornerRadius * 2);
-            ctx.fillRect(CANVAS_WIDTH -cornerRadius, -cornerRadius ,cornerRadius * 2, cornerRadius * 2);
-            ctx.fillRect(CANVAS_WIDTH -cornerRadius, CANVAS_HEIGHT-cornerRadius ,cornerRadius * 2, cornerRadius * 2);
-            ctx.fillRect(-cornerRadius, CANVAS_HEIGHT-cornerRadius ,cornerRadius * 2, cornerRadius * 2);
+            ctx.fillRect(-cornerRadius, -cornerRadius, cornerRadius * 2, cornerRadius * 2);
+            ctx.fillRect(CANVAS_WIDTH - cornerRadius, -cornerRadius, cornerRadius * 2, cornerRadius * 2);
+            ctx.fillRect(-cornerRadius, CANVAS_HEIGHT - cornerRadius, cornerRadius * 2, cornerRadius * 2);
+            ctx.fillRect(CANVAS_WIDTH - cornerRadius, CANVAS_HEIGHT - cornerRadius, cornerRadius * 2, cornerRadius * 2);
         });
     }
 

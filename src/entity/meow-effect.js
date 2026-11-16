@@ -1,13 +1,13 @@
+// 喵叫文本改为中文拟声词，避免玩家界面出现英文
 MEOWS = [
-    nomangle('MEOW'),
-    nomangle('MEWR'),
-    nomangle('MEW'),
-    nomangle('MOW'),
-    nomangle('MAW'),
-    nomangle('VRAOW'),
-    nomangle('MEWR'),
-    nomangle('MAORRAO'),
-    nomangle('MEWP'),
+    '喵',
+    '喵呜',
+    '喵噢',
+    '呜喵',
+    '嗷呜',
+    '喵嗷',
+    '呼噜',
+    '喵喵',
 ];
 
 class MeowEffect extends Entity {
@@ -38,7 +38,7 @@ class MeowEffect extends Entity {
     }
 
     render() {
-        ctx.translate(this.x, this.y);
+        ctx.translate(this.renderX, this.renderY);
         ctx.globalAlpha = 1 - this.age / 0.5;
 
         const count = 5;
@@ -54,7 +54,8 @@ class MeowEffect extends Entity {
 
         ctx.fillStyle = '#fff';
         ctx.textAlign = 'center';
-        ctx.font = '16px Impact';
+        ctx.textBaseline = nomangle('middle');
+        ctx.font = uiFont(18);
         ctx.fillText(this.textLabel, this.textX, this.textY);
     }
 }

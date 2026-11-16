@@ -933,19 +933,3 @@ SONG = {
   "songLen": 8
 }
 
-playSong = () => new MusicGenerator(SONG).createAudioBuffer(buffer => {
-    const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
-    source.loop = true;
-
-    const gainNode = audioCtx.createGain();
-    gainNode.connect(audioCtx.destination);
-    source.connect(gainNode);
-    source.nomangle(start)();
-
-    playSong = () => 0;
-    setSongVolume = (x) => gainNode.gain.value = x * SONG_VOLUME;
-    setSongVolume(1);
-});
-
-setSongVolume = () => 0;

@@ -1,53 +1,43 @@
+// 设计基准 1600x900：整帧按 UIScale 缩放到实际画布
+UIScale = 1;
+
+DESIGN_WIDTH = 1600;
+DESIGN_HEIGHT = 900;
+
 onresize = () => {
-    let windowWidth = innerWidth,
-        windowHeight = innerHeight,
+    const windowWidth = max(1, innerWidth);
+    const windowHeight = max(1, innerHeight);
 
-        availableRatio = windowWidth / windowHeight, // available ratio
-        canvasRatio = CANVAS_WIDTH / CANVAS_HEIGHT, // base ratio
-        appliedWidth,
-        appliedHeight,
-        containerStyle = t.style;
+    const designRatio = DESIGN_WIDTH / DESIGN_HEIGHT;
+    const screenRatio = windowWidth / windowHeight;
 
-    CANVAS_WIDTH = 1600;
-    CANVAS_HEIGHT = 900;
+    let renderWidth;
+    let renderHeight;
 
-    const expectedPixels = CANVAS_WIDTH * CANVAS_HEIGHT;
-
-    if (inputMode === INPUT_MODE_TOUCH) {
-        // Flip the aspect ratio if in portrait
-        if (windowWidth > windowHeight) {
-            const tmpWidth = CANVAS_WIDTH;
-            CANVAS_WIDTH = CANVAS_HEIGHT
-            CANVAS_HEIGHT = tmpWidth;
-        }
-
-        // Adjust the ratio so we fill the screen
-        const currentAspectRatio = CANVAS_WIDTH / CANVAS_HEIGHT;
-        if (currentAspectRatio < availableRatio) {
-            CANVAS_HEIGHT = CANVAS_WIDTH / availableRatio;
-        } else {
-            CANVAS_WIDTH = CANVAS_HEIGHT * availableRatio;
-        }
-
-        // Hack so we have enough pixels that we aren't zoomed in too much
-        while (CANVAS_WIDTH * CANVAS_HEIGHT / expectedPixels < 0.5) {
-            CANVAS_WIDTH *= 2;
-            CANVAS_HEIGHT *= 2;
-        }
+    if (screenRatio < designRatio) {
+        renderWidth = windowWidth;
+        renderHeight = renderWidth / designRatio;
     } else {
-        // Desktop mode, keep the aspect ratio intact
-        if (availableRatio <= canvasRatio) {
-            appliedWidth = windowWidth;
-            appliedHeight = appliedWidth / canvasRatio;
-        } else {
-            appliedHeight = windowHeight;
-            appliedWidth = appliedHeight * canvasRatio;
-        }
+        renderHeight = windowHeight;
+        renderWidth = renderHeight * designRatio;
     }
+
+    // 画布像素对齐屏幕，整帧缩放只发生在绘制阶段
+    let pixelRatio = min(window.devicePixelRatio || 1, 2);
+    const maxPixels = 2560 * 1440;
+    if (renderWidth * renderHeight * pixelRatio * pixelRatio > maxPixels) {
+        pixelRatio = sqrt(maxPixels / (renderWidth * renderHeight));
+    }
+
+    CANVAS_WIDTH = round(renderWidth * pixelRatio);
+    CANVAS_HEIGHT = round(renderHeight * pixelRatio);
 
     can.width = CANVAS_WIDTH;
     can.height = CANVAS_HEIGHT;
 
-    containerStyle.width = appliedWidth + 'px';
-    containerStyle.height = appliedHeight + 'px';
+    UIScale = CANVAS_WIDTH / DESIGN_WIDTH;
+
+    const containerStyle = document.getElementById(nomangle('t')).style;
+    containerStyle.width = renderWidth + 'px';
+    containerStyle.height = renderHeight + 'px';
 };
